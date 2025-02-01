@@ -403,3 +403,6 @@ FodyWeavers.xsd
 # Analyzer Editor
 Assets/ReLog/Scripts/Analyzer
 Assets/ReLog/Scripts/Analyzer.meta
+
+# Analyzer Temp Files
+Assets/ReLog/Temp
