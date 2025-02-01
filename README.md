@@ -2,6 +2,8 @@
 
 ReLog is a VRChat Debugging Solution for World Developers. It allows developers to quickly and easily redirect normal UnityEngine.Debug Log functions to the ReLog system or integrate their existing system with ReLog for out-of-the-box support.
 
+[![Discord](https://img.shields.io/discord/887157106472550422.svg?color=%237289da&label=discord&style=for-the-badge)](https://discord.gg/WF3B2r4xby)
+
 ## Installing
 
 1. Download the latest [ReLog.unitypackage](https://github.com/200Tigersbloxed/ReLog/releases/latest/download/ReLog.unitypackage)
