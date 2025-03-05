@@ -1,4 +1,5 @@
 ﻿using System;
+using ReLog.Serializing;
 using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
@@ -12,14 +13,25 @@ namespace ReLog.Networking
     {
         public CoreLogger Logger;
         
-        [UdonSynced] [HideInInspector] public string[] logs = new string[0];
-        [UdonSynced] [HideInInspector] public int[] levels = new int[0];
-        [UdonSynced] [HideInInspector] public long[] logDates = new long[0];
+        [HideInInspector] public string[] logs = new string[0];
+        [HideInInspector] public int[] levels = new int[0];
+        [HideInInspector] public long[] logDates = new long[0];
+        [UdonSynced] [HideInInspector] public string lastJson = "[]";
         [UdonSynced] [HideInInspector] public Color Color;
 
         public int ClearedIndex;
 
         private VRCPlayerApi local;
+        
+        // TODO: Use Compiled Regex
+        // For some reason I cannot get this to work at runtime.
+        // UdonSharp says this is supported in the class list, and it even compiles, but it just throws Exceptions anyways
+#if RELOG_GOOD_OPTIMIZED_CODE
+        private readonly Regex ObjectRegex = new Regex("\\{[^{}]*\\}", RegexOptions.Compiled);
+        private readonly Regex LogRegex = new Regex("\"Log\"\\s*:\\s*\"(.*?)\"", RegexOptions.Compiled);
+        private readonly Regex LevelRegex = new Regex("\"Level\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
+        private readonly Regex DateRegex = new Regex("\"Date\"\\s*:\\s*(\\d+)", RegexOptions.Compiled);
+#endif
 
         public VRCPlayerApi GetOwner() => VRC.SDKBase.Networking.GetOwner(gameObject);
 
@@ -35,12 +47,41 @@ namespace ReLog.Networking
             ClearedIndex = logs.Length;
         }
 
+        private void Deserialize()
+        {
+#if RELOG_GOOD_OPTIMIZED_CODE
+            string[] objects = JsonParser.GetObjects(lastJson, ObjectRegex);
+#else
+            string[] objects = JsonParser.GetObjects(lastJson);
+#endif
+            int length = objects.Length;
+            logs = new string[length];
+            levels = new int[length];
+            logDates = new long[length];
+            for (int i = 0; i < length; i++)
+            {
+#if RELOG_GOOD_OPTIMIZED_CODE
+                string log = JsonParser.GetLogAt(objects, i, LogRegex);
+                int level = JsonParser.GetLevelAt(objects, i, LevelRegex);
+                long date = JsonParser.GetDateAt(objects, i, DateRegex);
+#else
+                string log = JsonParser.GetLogAt(objects, i);
+                int level = JsonParser.GetLevelAt(objects, i);
+                long date = JsonParser.GetDateAt(objects, i);
+#endif
+                logs[i] = log;
+                levels[i] = level;
+                logDates[i] = date;
+            }
+        }
+        
         internal void PushNetworkLog(int level, string content)
         {
             long time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             Utils.Push(ref logs, content);
             Utils.Push(ref levels, level);
             Utils.Push(ref logDates, time);
+            lastJson = JsonParser.UpdateJson(logs, levels, logDates);
             RequestSerialization();
         }
 
@@ -59,6 +100,7 @@ namespace ReLog.Networking
 
         public override void OnDeserialization(DeserializationResult result)
         {
+            Deserialize();
             if(logs.Length != levels.Length || logs.Length != logDates.Length) return;
             Logger.ShowPlayerLog(GetOwner());
         }
@@ -71,6 +113,7 @@ namespace ReLog.Networking
             logs = new string[0];
             levels = new int[0];
             logDates = new long[0];
+            lastJson = "[]";
             GenerateColor();
             RequestSerialization();
         }
