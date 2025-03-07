@@ -4,6 +4,7 @@ using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon.Common;
+using Debug = UnityEngine.Debug;
 using Random = System.Random;
 
 namespace ReLog.Networking
@@ -16,6 +17,7 @@ namespace ReLog.Networking
         [HideInInspector] public string[] logs = new string[0];
         [HideInInspector] public int[] levels = new int[0];
         [HideInInspector] public long[] logDates = new long[0];
+        [HideInInspector] public bool[] processed = new bool[0];
         [UdonSynced] [HideInInspector] public string lastJson = "[]";
         [UdonSynced] [HideInInspector] public Color Color;
 
@@ -58,6 +60,7 @@ namespace ReLog.Networking
             logs = new string[length];
             levels = new int[length];
             logDates = new long[length];
+            processed = new bool[length];
             for (int i = 0; i < length; i++)
             {
 #if RELOG_GOOD_OPTIMIZED_CODE
@@ -72,6 +75,7 @@ namespace ReLog.Networking
                 logs[i] = log;
                 levels[i] = level;
                 logDates[i] = date;
+                processed[i] = false;
             }
         }
         
@@ -81,6 +85,7 @@ namespace ReLog.Networking
             Utils.Push(ref logs, content);
             Utils.Push(ref levels, level);
             Utils.Push(ref logDates, time);
+            Utils.Push(ref processed, false);
             lastJson = JsonParser.UpdateJson(logs, levels, logDates);
             RequestSerialization();
         }
@@ -113,6 +118,7 @@ namespace ReLog.Networking
             logs = new string[0];
             levels = new int[0];
             logDates = new long[0];
+            processed = new bool[0];
             lastJson = "[]";
             GenerateColor();
             RequestSerialization();

@@ -16,9 +16,7 @@ namespace ReLog.Editor
     public class CoreLoggerEditor : UnityEditor.Editor
     {
         private CoreLogger coreLogger;
-        public SerializedProperty TextObjects;
-        public SerializedProperty Scrolls;
-        public SerializedProperty Dropdowns;
+        public SerializedProperty LoggerViews;
         public SerializedProperty ClearButtons;
         public SerializedProperty WarnColor;
         public SerializedProperty ErrorColor;
@@ -157,9 +155,7 @@ namespace ReLog.Editor
             coreLogger = target as CoreLogger;
             if (coreLogger == null)
                 throw new Exception("Invalid Inspector");
-            TextObjects = serializedObject.FindProperty("TextObjects");
-            Scrolls = serializedObject.FindProperty("Scrolls");
-            Dropdowns = serializedObject.FindProperty("Dropdowns");
+            LoggerViews = serializedObject.FindProperty("LoggerViews");
             ClearButtons = serializedObject.FindProperty("ClearButtons");
             WarnColor = serializedObject.FindProperty("WarnColor");
             ErrorColor = serializedObject.FindProperty("ErrorColor");
@@ -281,10 +277,7 @@ namespace ReLog.Editor
                         "More than one CoreLogger was detected in your scene! This kind of setup is unsupported, please only use one!",
                         MessageType.Warning);
                 GUILayout.Label("Properties", EditorStyles.whiteLargeLabel);
-                EditorGUILayout.PropertyField(TextObjects, new GUIContent("Text Objects"));
-                EditorGUILayout.PropertyField(Scrolls, new GUIContent("Scrolls"));
-                EditorGUILayout.PropertyField(Dropdowns, new GUIContent("Dropdowns"));
-                EditorGUILayout.PropertyField(ClearButtons, new GUIContent("Clear Buttons"));
+                EditorGUILayout.PropertyField(LoggerViews, new GUIContent("Logger Views"));
                 EditorGUILayout.PropertyField(WarnColor, new GUIContent("Warning Color"));
                 EditorGUILayout.PropertyField(ErrorColor, new GUIContent("Error Color"));
                 EditorGUILayout.PropertyField(UsePersistentColors, new GUIContent("Use Persistent Colors"));

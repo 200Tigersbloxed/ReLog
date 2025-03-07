@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text;
 using ReLog.Networking;
+using TMPro;
 using UnityEngine;
 using VRC.SDKBase;
 
@@ -8,6 +9,8 @@ namespace ReLog
 {
     internal static class Utils
     {
+        private const string LINE_BREAK = "<br>";
+        
         public static void Push(ref string[] arr, string item)
         {
             string[] newArr = new string[arr.Length + 1];
@@ -32,6 +35,14 @@ namespace ReLog
             arr = newArr;
         }
         
+        public static void Push(ref bool[] arr, bool item)
+        {
+            bool[] newArr = new bool[arr.Length + 1];
+            Array.Copy(arr, newArr, arr.Length);
+            newArr[newArr.Length - 1] = item;
+            arr = newArr;
+        }
+        
         public static void Push(ref NetworkedLogger[] arr, NetworkedLogger item)
         {
             NetworkedLogger[] newArr = new NetworkedLogger[arr.Length + 1];
@@ -49,90 +60,109 @@ namespace ReLog
             return $"#{red:X2}{green:X2}{blue:X2}{alpha:X2}";
         }
 
+        public static bool IsDisabled(this LoggerView[] loggerViews)
+        {
+            bool v = true;
+            foreach (LoggerView disabledCheck in loggerViews)
+            {
+                if(!disabledCheck.gameObject.activeInHierarchy) continue;
+                v = false;
+                break;
+            }
+            return v;
+        }
+
+        public static void ApplyDropdowns(this LoggerView[] loggerViews, TMP_Dropdown.OptionData[] options, int index)
+        {
+            foreach (LoggerView loggerView in loggerViews)
+                loggerView.ApplyDropdownOptions(options, index);
+        }
+        
+        public static void ApplyDropdowns(this LoggerView[] loggerViews,int index)
+        {
+            foreach (LoggerView loggerView in loggerViews)
+                loggerView.ApplyDropdownIndex(index);
+        }
+        
+        public static void ScrollToBottom(this LoggerView[] loggerViews)
+        {
+            foreach (LoggerView loggerView in loggerViews)
+                loggerView.ScrollToBottom();
+        }
+        
+        public static void SetText(this LoggerView[] loggerViews, string text)
+        {
+            foreach (LoggerView loggerView in loggerViews)
+                loggerView.SetText(text);
+        }
+        
+        public static string CraftLogString(string log, int level, DateTime dateTime, Color playerColor, VRCPlayerApi player, Color warnColor, Color errorColor)
+        {
+            string extraColorTag = "";
+            string endExtraColorTag = "";
+            switch (level)
+            {
+                case 1:
+                    extraColorTag = $"<color={warnColor.ConvertToHex()}>";
+                    endExtraColorTag = "</color>";
+                    break;
+                case 2:
+                    extraColorTag = $"<color={errorColor.ConvertToHex()}>";
+                    endExtraColorTag = "</color>";
+                    break;
+            }
+            string text = extraColorTag +
+                          $"[{dateTime.Hour}:{dateTime.Minute}:{dateTime.Second}.{dateTime.Millisecond}] [" +
+                          endExtraColorTag +
+                          $"<color={playerColor.ConvertToHex()}>{player.GetPlayerStringIdentifier()}</color>" + extraColorTag +
+                          "] " + log + endExtraColorTag + LINE_BREAK;
+            return text;
+        }
+
         public static string GetPlayerStringIdentifier(this VRCPlayerApi player) =>
             $"{player.displayName} ({player.playerId})";
         
-        public static void GetSortedLogs(NetworkedLogger[] loggers, out string[] sortedLogs, out int[] sortedLevels, out long[] sortedLogDates, out Color[] sortedColors, out VRCPlayerApi[] players, bool ignoreIndex = false)
+        public static void GetFormattedLogs(NetworkedLogger[] loggers, Color warnColor, Color errorColor, out string text)
         {
+            StringBuilder finalLogText = new StringBuilder();
             int totalLogs = 0;
-            foreach (var logger in loggers)
+            int[] pointers = new int[loggers.Length];
+            for (int i = 0; i < loggers.Length; i++)
             {
-                if(logger.logs.Length != logger.levels.Length || logger.logs.Length != logger.logDates.Length) continue;
-                totalLogs += logger.logs.Length - (ignoreIndex ? 0 : logger.ClearedIndex);
+                pointers[i] = loggers[i].ClearedIndex;
+                totalLogs += loggers[i].logs.Length - loggers[i].ClearedIndex;
             }
-            string[] allLogs = new string[totalLogs];
-            int[] allLevels = new int[totalLogs];
-            long[] allLogDates = new long[totalLogs];
-            Color[] allColors = new Color[totalLogs];
-            VRCPlayerApi[] allPlayers = new VRCPlayerApi[totalLogs];
-            int index = 0;
-            foreach (var logger in loggers)
+            while (totalLogs > 0)
             {
-                int count = logger.logs.Length;
-                for (int i = ignoreIndex ? 0 : logger.ClearedIndex; i < count; i++)
+                long minTimestamp = long.MaxValue;
+                int minIndex = -1;
+                for (int i = 0; i < loggers.Length; i++)
                 {
-                    allLogs[index] = logger.logs[i];
-                    allLevels[index] = logger.levels[i];
-                    allLogDates[index] = logger.logDates[i];
-                    allColors[index] = logger.Color;
-                    allPlayers[index] = logger.GetOwner();
-                    index++;
-                }
-            }
-            for (int i = 0; i < totalLogs - 1; i++)
-            {
-                for (int j = 0; j < totalLogs - 1 - i; j++)
-                {
-                    if (allLogDates[j] > allLogDates[j + 1])
+                    if (pointers[i] < loggers[i].logs.Length)
                     {
-                        Swap(ref allLogDates[j], ref allLogDates[j + 1]);
-                        Swap(ref allLogs[j], ref allLogs[j + 1]);
-                        Swap(ref allLevels[j], ref allLevels[j + 1]);
-                        Swap(ref allColors[j], ref allColors[j + 1]);
-                        Swap(ref allPlayers[j], ref allPlayers[j + 1]);
+                        long timestamp = loggers[i].logDates[pointers[i]];
+                        if (timestamp < minTimestamp)
+                        {
+                            minTimestamp = timestamp;
+                            minIndex = i;
+                        }
                     }
                 }
+                if (minIndex == -1) break;
+                NetworkedLogger selectedLogger = loggers[minIndex];
+                int selectedIndex = pointers[minIndex];
+                // This shouldn't happen, but just in case...
+                if (selectedIndex < selectedLogger.logs.Length)
+                {
+                    finalLogText.Append(CraftLogString(selectedLogger.logs[selectedIndex],
+                        selectedLogger.levels[selectedIndex],
+                        DateTimeOffset.FromUnixTimeMilliseconds(selectedLogger.logDates[selectedIndex]).UtcDateTime,
+                        selectedLogger.Color, selectedLogger.GetOwner(), warnColor, errorColor));
+                }
+                pointers[minIndex]++;
+                totalLogs--;
             }
-            sortedLogs = allLogs;
-            sortedLevels = allLevels;
-            sortedLogDates = allLogDates;
-            sortedColors = allColors;
-            players = allPlayers;
-        }
-
-        private static void Swap(ref long a, ref long b)
-        {
-            long temp = a;
-            a = b;
-            b = temp;
-        }
-
-        private static void Swap(ref string a, ref string b)
-        {
-            string temp = a;
-            a = b;
-            b = temp;
-        }
-
-        private static void Swap(ref int a, ref int b)
-        {
-            int temp = a;
-            a = b;
-            b = temp;
-        }
-
-        private static void Swap(ref Color a, ref Color b)
-        {
-            Color temp = a;
-            a = b;
-            b = temp;
-        }
-        
-        private static void Swap(ref VRCPlayerApi a, ref VRCPlayerApi b)
-        {
-            VRCPlayerApi temp = a;
-            a = b;
-            b = temp;
+            text = finalLogText.ToString();
         }
     }
 }

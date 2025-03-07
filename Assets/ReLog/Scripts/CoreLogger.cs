@@ -1,35 +1,29 @@
 ﻿using System;
+using System.Text;
 using ReLog.Networking;
 using TMPro;
 using UdonSharp;
 using UnityEngine;
-using UnityEngine.UI;
-using VRC.SDK3.Components;
 using VRC.SDKBase;
+using Debug = UnityEngine.Debug;
 
 namespace ReLog
 {
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class CoreLogger : UdonSharpBehaviour
     {
-        private const string LINE_BREAK = "<br>";
-
         public NetworkPool Pool;
-        public TMP_Text[] TextObjects;
-        public ScrollRect[] Scrolls;
-        public TMP_Dropdown[] Dropdowns;
-        public Button[] ClearButtons;
+        public LoggerView[] LoggerViews;
         public Color WarnColor = new Color(1f, 0.75f, 0);
         public Color ErrorColor = new Color(0.6f, 0, 0f);
         public bool UsePersistentColors;
 
         private bool ready;
+        private int lastIndex;
         private VRCPlayerApi local;
         private VRCPlayerApi focused;
         private string[] waitingLogs = new string[0];
         private int[] waitingLevels = new int[0];
-        private int[] lastIndexes;
-        private int allClear;
 
         public void Log(string message) => SendLog(0, message);
         public void LogWarning(string message) => SendLog(1, message);
@@ -50,15 +44,27 @@ namespace ReLog
                 focused = player;
                 ShowPlayerLog(player);
             }
+            if(index == lastIndex) return;
+            lastIndex = index;
+            LoggerViews.ApplyDropdowns(index);
         }
 
         public void _Clear()
         {
-            if (focused == null) return;
-            NetworkedLogger networkedLogger = Pool.Get(focused);
-            if(networkedLogger == null) return;
-            networkedLogger.Clear();
-            ShowPlayerLog(focused);
+            if (focused == null)
+            {
+                //allClear = processedLogs;
+                foreach (NetworkedLogger networkedLogger in Pool.Loggers)
+                    networkedLogger.Clear();
+                ShowAll();
+            }
+            else
+            {
+                NetworkedLogger networkedLogger = Pool.Get(focused);
+                if (networkedLogger == null) return;
+                networkedLogger.Clear();
+                ShowPlayerLog(focused);
+            }
         }
 
         private void SendLog(int level, string message)
@@ -96,53 +102,17 @@ namespace ReLog
                 index = i + 1;
                 player = players[i];
             }
-            foreach (TMP_Dropdown dropwdown in Dropdowns)
-            {
-                dropwdown.ClearOptions();
-                dropwdown.AddOptions(options);
-                dropwdown.value = index;
-            }
+            LoggerViews.ApplyDropdowns(options, index);
             focused = player;
             ShowPlayerLog(player);
         }
 
-        private void SetButtonVisibility(bool state)
-        {
-            foreach (Button clearButton in ClearButtons)
-                clearButton.gameObject.SetActive(state);
-        }
+        private void ScrollToBottom() => LoggerViews.ScrollToBottom();
 
-        private void ScrollToBottom()
+        internal void ShowPlayerLog(VRCPlayerApi player = null)
         {
-            foreach (ScrollRect scrollRect in Scrolls)
-                scrollRect.normalizedPosition = new Vector2(0, 0);
-        }
-
-        private string CraftLogString(string log, int level, DateTime dateTime, Color playerColor, VRCPlayerApi player)
-        {
-            string extraColorTag = "";
-            string endExtraColorTag = "";
-            switch (level)
-            {
-                case 1:
-                    extraColorTag = $"<color={WarnColor.ConvertToHex()}>";
-                    endExtraColorTag = "</color>";
-                    break;
-                case 2:
-                    extraColorTag = $"<color={ErrorColor.ConvertToHex()}>";
-                    endExtraColorTag = "</color>";
-                    break;
-            }
-            string text = extraColorTag +
-                    $"[{dateTime.Hour}:{dateTime.Minute}:{dateTime.Second}.{dateTime.Millisecond}] [" +
-                    endExtraColorTag +
-                    $"<color={playerColor.ConvertToHex()}>{player.GetPlayerStringIdentifier()}</color>" + extraColorTag +
-                    "] " + log + endExtraColorTag + LINE_BREAK;
-            return text;
-        }
-
-        internal void ShowPlayerLog(VRCPlayerApi player)
-        {
+            if(LoggerViews.IsDisabled()) return;
+            if (player == null) player = focused;
             if (focused == null)
             {
                 ShowAll();
@@ -155,7 +125,7 @@ namespace ReLog
                 Debug.LogError("Could not find NetworkedLogger for player " + player.displayName);
                 return;
             }
-            string text = "";
+            StringBuilder text = new StringBuilder();
             if (networkedLogger.logs.Length != networkedLogger.levels.Length ||
                 networkedLogger.logs.Length != networkedLogger.logDates.Length) return;
             for (int i = networkedLogger.ClearedIndex; i < networkedLogger.logs.Length; i++)
@@ -163,42 +133,25 @@ namespace ReLog
                 int level = networkedLogger.levels[i];
                 string log = networkedLogger.logs[i];
                 DateTime dateTime = DateTimeOffset.FromUnixTimeMilliseconds(networkedLogger.logDates[i]).UtcDateTime;
-                text += CraftLogString(log, level, dateTime, networkedLogger.Color, player);
+                text.Append(Utils.CraftLogString(log, level, dateTime, networkedLogger.Color, player, WarnColor, ErrorColor));
             }
-            foreach (TMP_Text textObject in TextObjects)
-                textObject.text = text;
+            string finalText = text.ToString();
+            LoggerViews.SetText(finalText);
             ScrollToBottom();
-            SetButtonVisibility(true);
         }
 
         private void ShowAll()
         {
-            string text = "";
-            string[] logs;
-            int[] levels;
-            long[] dates;
-            Color[] colors;
-            VRCPlayerApi[] players;
-            Utils.GetSortedLogs(Pool.Loggers, out logs, out levels, out dates, out colors, out players);
-            for (int i = allClear; i < logs.Length; i++)
-            {
-                string log = logs[i];
-                int level = levels[i];
-                DateTime dateTime = DateTimeOffset.FromUnixTimeMilliseconds(dates[i]).UtcDateTime;
-                Color color = colors[i];
-                VRCPlayerApi player = players[i];
-                text += CraftLogString(log, level, dateTime, color, player);
-            }
-            foreach (TMP_Text textObject in TextObjects)
-                textObject.text = text;
+            if(LoggerViews.IsDisabled()) return;
+            string text;
+            Utils.GetFormattedLogs(Pool.Loggers, WarnColor, ErrorColor, out text);
+            LoggerViews.SetText(text);
             ScrollToBottom();
-            SetButtonVisibility(false);
         }
 
         private void Start()
         {
             local = VRC.SDKBase.Networking.LocalPlayer;
-            lastIndexes = new int[Dropdowns.Length];
             Pool.Initialize();
             ready = true;
             for (int i = 0; i < waitingLogs.Length; i++)
@@ -213,27 +166,6 @@ namespace ReLog
         {
             if(Pool._Update())
                 UpdateDropdown(Pool.Players);
-            int indexToUpdate = -1;
-            for (int i = 0; i < Dropdowns.Length; i++)
-            {
-                TMP_Dropdown currentDropdown = Dropdowns[i];
-                int lastIndex = lastIndexes[i];
-                if (currentDropdown.value != lastIndex)
-                {
-                    indexToUpdate = currentDropdown.value;
-                    break;
-                }
-            }
-            if (indexToUpdate > -1)
-            {
-                for (int i = 0; i < Dropdowns.Length; i++)
-                {
-                    TMP_Dropdown currentDropdown = Dropdowns[i];
-                    currentDropdown.value = indexToUpdate;
-                    lastIndexes[i] = indexToUpdate;
-                }
-                _RefreshLog(indexToUpdate);
-            }
         }
     }
 }

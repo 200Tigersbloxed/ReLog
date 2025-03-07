@@ -36,6 +36,7 @@ namespace ReLog.Networking
                         networkedLogger.logs = new string[0];
                         networkedLogger.logDates = new long[0];
                         networkedLogger.levels = new int[0];
+                        networkedLogger.processed = new bool[0];
                         networkedLogger.lastJson = "[]";
                         VRC.SDKBase.Networking.SetOwner(player, networkedLogger.gameObject);
                         Debug.Log($"Assigned {networkedLogger.gameObject.name} to {player.displayName} ({player.playerId})");
