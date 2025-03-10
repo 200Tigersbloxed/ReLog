@@ -53,7 +53,6 @@ namespace ReLog
         {
             if (focused == null)
             {
-                //allClear = processedLogs;
                 foreach (NetworkedLogger networkedLogger in Pool.Loggers)
                     networkedLogger.Clear();
                 ShowAll();
@@ -65,6 +64,13 @@ namespace ReLog
                 networkedLogger.Clear();
                 ShowPlayerLog(focused);
             }
+        }
+
+        public void ClearEverything()
+        {
+            foreach (NetworkedLogger networkedLogger in Pool.Loggers)
+                networkedLogger.Clear();
+            ShowPlayerLog();
         }
 
         private void SendLog(int level, string message)
